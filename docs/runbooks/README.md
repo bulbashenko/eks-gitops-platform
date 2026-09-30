@@ -3,7 +3,7 @@
 Short, symptom-first procedures. Every command assumes:
 
 ```bash
-export AWS_REGION=eu-central-1
+export AWS_REGION=eu-north-1
 aws eks update-kubeconfig --region "$AWS_REGION" --name egp-demo
 ```
 

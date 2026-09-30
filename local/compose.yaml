@@ -5,7 +5,7 @@
 # S3 receipts are disabled locally (S3_BUCKET unset).
 
 x-aws: &aws
-  AWS_REGION: eu-central-1
+  AWS_REGION: eu-north-1
   AWS_ACCESS_KEY_ID: local
   AWS_SECRET_ACCESS_KEY: local
   AWS_ENDPOINT_URL_SQS: http://sqs:9324

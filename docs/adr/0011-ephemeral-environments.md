@@ -12,7 +12,7 @@ The project must run for the price of AWS promotional credits. An always-on EKS 
 - A monthly **AWS Budget** alerts at 50/80/100% of $10 (measured without credits), plus a forecast alert.
 - Teardown is **controller-aware** (`scripts/platform-down.sh`). It pauses Argo CD, deletes Ingresses and NodePools so the LB controller and Karpenter remove the ALB and EC2 instances they created, waits for them to go, then destroys the layers in reverse order.
 
-## Cost while running (eu-central-1, approximate)
+## Cost while running (eu-north-1, approximate)
 
 | Item | $/hour |
 |---|---|

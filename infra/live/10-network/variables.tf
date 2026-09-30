@@ -1,6 +1,6 @@
 variable "region" {
   type    = string
-  default = "eu-central-1"
+  default = "eu-north-1"
 }
 
 variable "project" {
@@ -27,5 +27,5 @@ variable "single_nat_gateway" {
 variable "azs" {
   description = "Pinned explicitly so the subnet layout never shifts when AWS adds a zone."
   type        = list(string)
-  default     = ["eu-central-1a", "eu-central-1b", "eu-central-1c"]
+  default     = ["eu-north-1a", "eu-north-1b", "eu-north-1c"]
 }

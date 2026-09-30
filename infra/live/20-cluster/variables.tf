@@ -1,6 +1,6 @@
 variable "region" {
   type    = string
-  default = "eu-central-1"
+  default = "eu-north-1"
 }
 
 variable "project" {
@@ -15,7 +15,7 @@ variable "environment" {
 
 variable "kubernetes_version" {
   type    = string
-  default = "1.35"
+  default = "1.36"
 }
 
 variable "system_instance_type" {

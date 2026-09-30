@@ -26,7 +26,7 @@ flowchart LR
   appci -- commit image tag --> gh
   plat -- OIDC, admin role<br/>only in 'platform' env --> aws
 
-  subgraph aws[AWS account · eu-central-1]
+  subgraph aws[AWS account · eu-north-1]
     subgraph vpc[VPC 10.0.0.0/16 · 3 AZs]
       alb[ALB<br/>one IngressGroup]
       subgraph eks[EKS]

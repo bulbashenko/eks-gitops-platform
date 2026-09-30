@@ -3,7 +3,7 @@ SHELL        := /bin/bash
 .DEFAULT_GOAL := help
 
 PROJECT      ?= egp
-REGION       ?= eu-central-1
+REGION       ?= eu-north-1
 # Ephemeral layers in apply order; `down` destroys them in reverse.
 LAYERS       := 10-network 20-cluster 30-data
 

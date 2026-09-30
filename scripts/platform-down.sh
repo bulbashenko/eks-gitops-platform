@@ -6,7 +6,7 @@ set -euo pipefail
 
 PROJECT=${PROJECT:-egp}
 ENVIRONMENT=${ENVIRONMENT:-demo}
-REGION=${REGION:-${AWS_REGION:-eu-central-1}}
+REGION=${REGION:-${AWS_REGION:-eu-north-1}}
 CLUSTER="${PROJECT}-${ENVIRONMENT}"
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 TIMEOUT=${TIMEOUT:-900}

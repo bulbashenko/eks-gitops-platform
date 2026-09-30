@@ -6,7 +6,7 @@
    Or run it locally: `TF_VAR_ui_allowed_cidrs='["<ip>/32"]' make up`.
 2. Wait about 10 minutes after the job finishes, then check:
    ```bash
-   aws eks update-kubeconfig --region eu-central-1 --name egp-demo
+   aws eks update-kubeconfig --region eu-north-1 --name egp-demo
    kubectl get applications -n argocd          # all Synced / Healthy
    curl -s https://api.demo.bulbashenko.com/version
    ```
