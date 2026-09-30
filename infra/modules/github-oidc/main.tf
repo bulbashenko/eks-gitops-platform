@@ -14,7 +14,8 @@ resource "aws_iam_openid_connect_provider" "github" {
 }
 
 locals {
-  provider_arn = var.create_provider ? aws_iam_openid_connect_provider.github[0].arn : data.aws_iam_openid_connect_provider.existing[0].arn
+  subject_prefix = coalesce(var.subject_prefix, "repo:${var.repository}")
+  provider_arn   = var.create_provider ? aws_iam_openid_connect_provider.github[0].arn : data.aws_iam_openid_connect_provider.existing[0].arn
 }
 
 data "aws_iam_policy_document" "trust" {
@@ -34,7 +35,7 @@ data "aws_iam_policy_document" "trust" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = [for s in each.value.subjects : "repo:${var.repository}:${s}"]
+      values   = [for s in each.value.subjects : "${local.subject_prefix}:${s}"]
     }
   }
 }

@@ -14,6 +14,12 @@ variable "github_repository" {
   type        = string
 }
 
+variable "github_oidc_subject_prefix" {
+  description = "OIDC sub prefix incl. immutable owner/repo IDs: gh api repos/<owner>/<repo>/actions/oidc/customization/sub"
+  type        = string
+  default     = null
+}
+
 variable "create_github_oidc_provider" {
   description = "Only one GitHub OIDC provider can exist per account; set false to reuse an existing one."
   type        = bool

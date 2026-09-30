@@ -57,6 +57,7 @@ module "github_oidc" {
   source = "../../modules/github-oidc"
 
   repository      = var.github_repository
+  subject_prefix  = var.github_oidc_subject_prefix
   create_provider = var.create_github_oidc_provider
 
   roles = {

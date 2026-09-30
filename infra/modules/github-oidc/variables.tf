@@ -3,6 +3,17 @@ variable "repository" {
   type        = string
 }
 
+variable "subject_prefix" {
+  description = <<-EOT
+    OIDC `sub` prefix. Repositories using GitHub's immutable subject format send
+    "repo:<owner>@<owner_id>/<repo>@<repo_id>" (see the repo's actions/oidc/customization/sub);
+    pinning the numeric IDs means a deleted-and-recreated repo with the same name cannot assume the roles.
+    Defaults to the classic "repo:<owner>/<repo>".
+  EOT
+  type        = string
+  default     = null
+}
+
 variable "create_provider" {
   description = "Create the account-wide GitHub OIDC provider. Set false if it already exists."
   type        = bool
