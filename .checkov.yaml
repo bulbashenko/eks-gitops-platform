@@ -1,0 +1,20 @@
+# Checkov settings. Every skip is a conscious decision, documented with its reason.
+directory:
+  - infra
+framework:
+  - terraform
+download-external-modules: true
+quiet: true
+skip-check:
+  # Demo environment: S3 access logging and cross-region replication of the state bucket
+  # would need extra buckets that outlive the project. Versioning + KMS cover recovery.
+  - CKV_AWS_18
+  - CKV_AWS_144
+  # Event notifications on the state bucket are not needed.
+  - CKV2_AWS_62
+  # Demo DNS zone: DNSSEC needs a DS record at the parent (he.net), and query logging a
+  # us-east-1 log group; both are listed in the roadmap rather than half-done here.
+  - CKV2_AWS_38
+  - CKV2_AWS_39
+  # The tf-apply role is admin by design, restricted by the OIDC environment claim (ADR-0004).
+  - CKV_AWS_274

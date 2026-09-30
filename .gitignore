@@ -1,0 +1,20 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+*.auto.tfvars
+infra/bootstrap/terraform.tfstate*
+
+# Go
+/apps/bin/
+*.test
+coverage.out
+
+# Local
+.env
+*.kubeconfig
+.DS_Store
+.idea/
+.vscode/

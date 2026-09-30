@@ -1,0 +1,43 @@
+# Local development stack: the services talk to real Postgres and an SQS-compatible queue
+# (ElasticMQ), so the whole flow runs on a laptop without an AWS account.
+#   docker compose -f local/compose.yaml up --build
+#   curl -XPOST localhost:8080/orders -d '{"item":"coffee","qty":2}'
+# S3 receipts are disabled locally (S3_BUCKET unset).
+
+x-aws: &aws
+  AWS_REGION: eu-central-1
+  AWS_ACCESS_KEY_ID: local
+  AWS_SECRET_ACCESS_KEY: local
+  AWS_ENDPOINT_URL_SQS: http://sqs:9324
+  SQS_QUEUE_URL: http://sqs:9324/000000000000/orders
+  DATABASE_URL: postgres://app:app@postgres:5432/orders?sslmode=disable
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: orders
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "app"]
+      interval: 2s
+
+  sqs:
+    image: softwaremill/elasticmq-native:1.7.1
+    volumes:
+      - ./elasticmq.conf:/opt/elasticmq.conf:ro
+
+  api:
+    build: { context: ../apps, args: { SERVICE: api, VERSION: local } }
+    environment:
+      <<: *aws
+      FAULT_RATE: ${FAULT_RATE:-0}
+    ports: ["8080:8080"]
+    depends_on: { postgres: { condition: service_healthy }, sqs: { condition: service_started } }
+
+  worker:
+    build: { context: ../apps, args: { SERVICE: worker, VERSION: local } }
+    environment: *aws
+    ports: ["8081:8080"]
+    depends_on: { postgres: { condition: service_healthy }, sqs: { condition: service_started } }
