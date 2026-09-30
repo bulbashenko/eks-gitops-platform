@@ -55,10 +55,11 @@ resource "aws_iam_role_policy_attachments_exclusive" "this" {
   policy_arns = each.value.managed_policy_arns
 }
 
+# Keyed by role name (known at plan time); the policy JSON may be unknown until apply.
 resource "aws_iam_role_policy" "inline" {
-  for_each = { for k, v in var.roles : k => v if v.inline_policy_json != null }
+  for_each = var.inline_policies
 
   name   = "inline"
   role   = aws_iam_role.this[each.key].id
-  policy = each.value.inline_policy_json
+  policy = each.value
 }

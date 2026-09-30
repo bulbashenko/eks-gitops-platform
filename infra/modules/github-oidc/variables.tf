@@ -18,7 +18,12 @@ variable "roles" {
     description          = string
     subjects             = list(string)
     managed_policy_arns  = optional(list(string), [])
-    inline_policy_json   = optional(string)
     max_session_duration = optional(number, 3600)
   }))
+}
+
+variable "inline_policies" {
+  description = "Inline policy JSON per role name. Keys must match keys of `roles`."
+  type        = map(string)
+  default     = {}
 }

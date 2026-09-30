@@ -61,15 +61,13 @@ module "github_oidc" {
 
   roles = {
     "${var.project}-gha-ecr-push" = {
-      description        = "GitHub Actions: build and push images from main"
-      subjects           = ["ref:refs/heads/main"]
-      inline_policy_json = data.aws_iam_policy_document.ecr_push.json
+      description = "GitHub Actions: build and push images from main"
+      subjects    = ["ref:refs/heads/main"]
     }
     "${var.project}-gha-tf-plan" = {
       description         = "GitHub Actions: terraform plan (read-only)"
       subjects            = ["pull_request", "ref:refs/heads/main"]
       managed_policy_arns = ["arn:aws:iam::aws:policy/ReadOnlyAccess"]
-      inline_policy_json  = data.aws_iam_policy_document.tf_plan.json
     }
     "${var.project}-gha-tf-apply" = {
       description          = "GitHub Actions: terraform apply/destroy via the approved platform environment"
@@ -77,5 +75,10 @@ module "github_oidc" {
       managed_policy_arns  = ["arn:aws:iam::aws:policy/AdministratorAccess"]
       max_session_duration = 7200
     }
+  }
+
+  inline_policies = {
+    "${var.project}-gha-ecr-push" = data.aws_iam_policy_document.ecr_push.json
+    "${var.project}-gha-tf-plan"  = data.aws_iam_policy_document.tf_plan.json
   }
 }
