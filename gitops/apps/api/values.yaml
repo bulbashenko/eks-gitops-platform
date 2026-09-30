@@ -1,7 +1,7 @@
 name: api
 
 image:
-  tag: "8b7ef62"   # set by CI
+  tag: "d5f8a3e"   # set by CI
 
 ingress:
   enabled: true

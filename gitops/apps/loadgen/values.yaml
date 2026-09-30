@@ -1,7 +1,7 @@
 name: loadgen
 
 image:
-  tag: "8b7ef62"   # set by CI
+  tag: "d5f8a3e"   # set by CI
 
 # Steady synthetic traffic through the public ALB, so canary analysis always has data.
 replicas: 1
