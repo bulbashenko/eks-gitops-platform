@@ -32,7 +32,7 @@ The spec cannot drift from the code without failing `go test` (locally, in pre-c
 
 "Public" means routed by the internet-facing ALB. The other endpoints exist on every pod but are reachable only from inside the cluster (kubelet probes, Prometheus scrapes).
 
-Every response carries **`X-App-Version`**, the build that served it. During a canary this shows the traffic split from outside:
+Every response carries **`X-App-Version`**, the build that served it. During a canary this shows the traffic split from outside. Sample a few seconds *after* the weight changes, because the ALB controller applies new weights to the listener within ~10–30 s:
 
 ```bash
 for i in $(seq 20); do curl -sI https://api.demo.bulbashenko.com/version | grep -i x-app-version; done | sort | uniq -c
