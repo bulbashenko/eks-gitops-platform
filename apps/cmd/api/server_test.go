@@ -28,7 +28,13 @@ func (f *fakeQueue) Publish(_ context.Context, m queue.OrderMessage) error {
 
 type fakeOrders map[string]store.Order
 
+// dbDownID makes the fake behave like an unreachable database.
+const dbDownID = "dddddddddddddddddddddddddddddddd"
+
 func (f fakeOrders) Get(_ context.Context, id string) (store.Order, error) {
+	if id == dbDownID {
+		return store.Order{}, errors.New("connection refused")
+	}
 	o, ok := f[id]
 	if !ok {
 		return o, store.ErrNotFound
@@ -42,9 +48,12 @@ func newTestMux(s *server) *http.ServeMux {
 	return mux
 }
 
-func do(mux http.Handler, method, target, body string) *httptest.ResponseRecorder {
+// do serves one request and checks the response against openapi.yaml (contract test).
+func do(t *testing.T, mux http.Handler, method, target, body string) *httptest.ResponseRecorder {
+	t.Helper()
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, httptest.NewRequest(method, target, strings.NewReader(body)))
+	mux.ServeHTTP(rec, httptest.NewRequest(method, specBaseURL+target, strings.NewReader(body)))
+	validateResponse(t, httptest.NewRequest(method, specBaseURL+target, nil), rec)
 	return rec
 }
 
@@ -65,7 +74,7 @@ func TestCreateOrder(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			q := &fakeQueue{err: tt.queueErr}
-			rec := do(newTestMux(&server{queue: q}), "POST", "/orders", tt.body)
+			rec := do(t, newTestMux(&server{queue: q}), "POST", "/orders", tt.body)
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d (body %s)", rec.Code, tt.wantStatus, rec.Body)
 			}
@@ -77,23 +86,43 @@ func TestCreateOrder(t *testing.T) {
 }
 
 func TestGetOrder(t *testing.T) {
-	orders := fakeOrders{"abc": {ID: "abc", Item: "tea", Qty: 1, CreatedAt: time.Now()}}
-	mux := newTestMux(&server{orders: orders})
+	const id = "0123456789abcdef0123456789abcdef"
+	now := time.Now().UTC()
+	mux := newTestMux(&server{orders: fakeOrders{id: {ID: id, Item: "tea", Qty: 1, CreatedAt: now, ProcessedAt: now}}})
 
-	if rec := do(mux, "GET", "/orders/abc", ""); rec.Code != http.StatusOK {
-		t.Fatalf("existing order: status = %d", rec.Code)
+	for _, tt := range []struct {
+		id   string
+		want int
+	}{
+		{id, http.StatusOK},
+		{"ffffffffffffffffffffffffffffffff", http.StatusNotFound},
+		{dbDownID, http.StatusInternalServerError},
+	} {
+		if rec := do(t, mux, "GET", "/orders/"+tt.id, ""); rec.Code != tt.want {
+			t.Errorf("GET /orders/%s: status = %d, want %d", tt.id, rec.Code, tt.want)
+		}
 	}
-	if rec := do(mux, "GET", "/orders/missing", ""); rec.Code != http.StatusNotFound {
-		t.Fatalf("missing order: status = %d", rec.Code)
+}
+
+func TestBurnAndVersion(t *testing.T) {
+	mux := newTestMux(&server{version: "abc1234"})
+	if rec := do(t, mux, "GET", "/burn?ms=1", ""); rec.Code != http.StatusOK {
+		t.Fatalf("/burn: status = %d", rec.Code)
+	}
+	if rec := do(t, mux, "GET", "/burn?ms=99999", ""); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"burned_ms":500`) {
+		t.Fatalf("/burn must cap at 500ms, got %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, mux, "GET", "/version", ""); !strings.Contains(rec.Body.String(), "abc1234") {
+		t.Fatalf("/version body = %s", rec.Body)
 	}
 }
 
 func TestFaultInjection(t *testing.T) {
 	mux := newTestMux(&server{faultRate: 1})
-	if rec := do(mux, "GET", "/burn?ms=1", ""); rec.Code != http.StatusInternalServerError {
+	if rec := do(t, mux, "GET", "/burn?ms=1", ""); rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500 with fault rate 1", rec.Code)
 	}
-	if rec := do(mux, "GET", "/version", ""); rec.Code != http.StatusOK {
+	if rec := do(t, mux, "GET", "/version", ""); rec.Code != http.StatusOK {
 		t.Fatalf("/version must not be affected by fault injection, got %d", rec.Code)
 	}
 }

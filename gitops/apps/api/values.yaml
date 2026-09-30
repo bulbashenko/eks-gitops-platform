@@ -11,6 +11,7 @@ ingress:
     - /orders
     - /version
     - /burn
+    - /openapi.yaml
 
 rollout:
   enabled: true

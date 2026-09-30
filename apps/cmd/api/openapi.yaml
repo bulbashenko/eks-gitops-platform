@@ -1,0 +1,252 @@
+openapi: 3.1.0
+info:
+  title: Orders API
+  version: "1.0.0"
+  summary: Accepts orders asynchronously and serves them once processed.
+  description: |
+    `POST /orders` validates an order, publishes it to SQS and answers `202` immediately.
+    A worker consumes the queue, stores the order in PostgreSQL and writes a receipt to S3.
+    `GET /orders/{id}` returns `404` until that has happened, which usually takes well under a second.
+
+    Every response carries `X-App-Version` (the git SHA of the build). During a canary release this
+    shows which version served a request.
+
+    **Public vs internal.** Only the operations tagged `orders`, `diagnostics` and `meta` are routed by
+    the public load balancer. `operations` endpoints (`/healthz`, `/readyz`, `/metrics`) exist on every
+    pod but are reachable only inside the cluster (kubelet probes, Prometheus).
+
+    This file is embedded in the binary and served at `GET /openapi.yaml`. Tests fail if the routes in
+    code and the operations here diverge, or if a handler returns a status or body the spec does not describe.
+  license:
+    name: MIT
+    identifier: MIT
+
+servers:
+  - url: https://api.demo.bulbashenko.com
+    description: Demo environment (exists only while the platform is up)
+  - url: http://localhost:8080
+    description: Local stack (`make local-up`)
+
+tags:
+  - name: orders
+    description: Business operations
+  - name: diagnostics
+    description: Demo helpers (version, CPU load)
+  - name: meta
+    description: The API description itself
+  - name: operations
+    description: Cluster-internal health and metrics endpoints (not routed publicly)
+
+paths:
+  /orders:
+    post:
+      tags: [orders]
+      operationId: createOrder
+      summary: Place an order
+      description: |
+        Validates the order and queues it. Processing is asynchronous: poll `GET /orders/{id}` with the
+        returned id. Delivery is at-least-once and processing is idempotent on the id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateOrderRequest" }
+            example: { item: coffee, qty: 2 }
+      responses:
+        "202":
+          description: Accepted and queued
+          headers:
+            X-App-Version: { $ref: "#/components/headers/XAppVersion" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrderAccepted" }
+              example: { id: f359e6b5f0870f1a50c3411f270e8d05, status: queued }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "500": { $ref: "#/components/responses/InjectedFault" }
+        "503":
+          description: The queue is unavailable; nothing was accepted, retry later
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { error: could not queue order }
+
+  /orders/{id}:
+    get:
+      tags: [orders]
+      operationId: getOrder
+      summary: Get a processed order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Order id returned by `POST /orders`
+          schema: { type: string, pattern: "^[0-9a-f]{32}$" }
+      responses:
+        "200":
+          description: The order has been processed
+          headers:
+            X-App-Version: { $ref: "#/components/headers/XAppVersion" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "404":
+          description: Unknown id, or accepted but not processed yet
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { error: order not found or not processed yet }
+        "500":
+          description: Database error, or an injected fault
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /version:
+    get:
+      tags: [diagnostics]
+      operationId: getVersion
+      summary: Build version serving this request
+      responses:
+        "200":
+          description: Version (git SHA)
+          headers:
+            X-App-Version: { $ref: "#/components/headers/XAppVersion" }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [version]
+                properties:
+                  version: { type: string, examples: [8b7ef62] }
+
+  /burn:
+    get:
+      tags: [diagnostics]
+      operationId: burnCpu
+      summary: Spend CPU time (load-testing helper)
+      description: Hashes in a loop for `ms` milliseconds so a load test can drive the HPA and Karpenter.
+      parameters:
+        - name: ms
+          in: query
+          required: false
+          description: Milliseconds of CPU to burn; invalid or missing means 50, values above 500 are capped
+          schema: { type: integer, default: 50 }
+      responses:
+        "200":
+          description: Done
+          headers:
+            X-App-Version: { $ref: "#/components/headers/XAppVersion" }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [burned_ms, hash]
+                properties:
+                  burned_ms: { type: integer, minimum: 1, maximum: 500 }
+                  hash: { type: string, description: First bytes of the final hash (proves work was done) }
+        "500": { $ref: "#/components/responses/InjectedFault" }
+
+  /openapi.yaml:
+    get:
+      tags: [meta]
+      operationId: getOpenAPI
+      summary: This document
+      responses:
+        "200":
+          description: OpenAPI description of this API
+          content:
+            application/yaml:
+              schema: { type: object, description: An OpenAPI 3.1 document }
+
+  /healthz:
+    get:
+      tags: [operations]
+      operationId: liveness
+      summary: Liveness probe (cluster-internal)
+      description: 200 while the process runs. A failing liveness probe makes the kubelet restart the container.
+      responses:
+        "200": { description: Alive }
+
+  /readyz:
+    get:
+      tags: [operations]
+      operationId: readiness
+      summary: Readiness probe (cluster-internal)
+      description: |
+        200 when the database answers a ping within 1s. Returns 503 as soon as shutdown begins, so the
+        load balancer stops sending traffic before the server closes.
+      responses:
+        "200": { description: Ready }
+        "503":
+          description: Not ready (database unreachable or shutting down)
+          content:
+            text/plain:
+              schema: { type: string }
+
+  /metrics:
+    get:
+      tags: [operations]
+      operationId: metrics
+      summary: Prometheus metrics (cluster-internal)
+      description: |
+        RED metrics `http_requests_total{method,route,code}` and `http_request_duration_seconds{method,route}`
+        (the route is the pattern, not the raw path, so label cardinality stays bounded), plus Go runtime metrics.
+      responses:
+        "200":
+          description: Prometheus text exposition format
+          content:
+            text/plain:
+              schema: { type: string }
+
+components:
+  headers:
+    XAppVersion:
+      description: Git SHA of the build that served the request
+      schema: { type: string }
+
+  responses:
+    BadRequest:
+      description: The request body is not valid JSON or violates the constraints
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: qty must be between 1 and 1000 }
+    InjectedFault:
+      description: |
+        Returned for a fraction of requests when the deployment sets `FAULT_RATE` > 0. It exists to
+        produce a "bad release" for the canary-analysis demo and never happens with the default of 0.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: injected fault }
+
+  schemas:
+    CreateOrderRequest:
+      type: object
+      required: [item, qty]
+      properties:
+        item: { type: string, minLength: 1, maxLength: 100, examples: [coffee] }
+        qty: { type: integer, minimum: 1, maximum: 1000, examples: [2] }
+
+    OrderAccepted:
+      type: object
+      required: [id, status]
+      properties:
+        id: { type: string, pattern: "^[0-9a-f]{32}$" }
+        status: { type: string, enum: [queued] }
+
+    Order:
+      type: object
+      required: [id, item, qty, created_at, processed_at]
+      properties:
+        id: { type: string, pattern: "^[0-9a-f]{32}$" }
+        item: { type: string }
+        qty: { type: integer }
+        created_at: { type: string, format: date-time, description: When the api accepted the order }
+        processed_at: { type: string, format: date-time, description: When the worker stored it }
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }

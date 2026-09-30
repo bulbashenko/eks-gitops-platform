@@ -10,6 +10,7 @@ Only a small persistent layer (state, registries, DNS, certificate) survives bet
 | Read | For |
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | How it fits together, with diagrams |
+| [docs/api.md](docs/api.md) | Orders API: endpoints, examples, errors. The contract is [openapi.yaml](apps/cmd/api/openapi.yaml), enforced by tests |
 | [docs/adr/](docs/adr/README.md) | 11 decision records: what was chosen, the trade-offs, the rejected alternatives |
 | [docs/demo-script.md](docs/demo-script.md) | Live demo: canary auto-rollback, Karpenter scale-out, policy enforcement |
 | [docs/runbooks/](docs/runbooks/README.md) | Symptom-first operational procedures |

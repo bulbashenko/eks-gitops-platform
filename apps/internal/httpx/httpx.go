@@ -85,6 +85,9 @@ func NewProbes(ready func(context.Context) error) *Probes {
 	return &Probes{ready: ready}
 }
 
+// ProbeRoutes lists the patterns Register serves, so API contracts can account for them.
+var ProbeRoutes = []string{"GET /healthz", "GET /readyz", "GET /metrics"}
+
 func (p *Probes) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)

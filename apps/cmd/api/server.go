@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	_ "embed"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -33,11 +34,39 @@ type server struct {
 	version   string
 }
 
+// openAPISpec is the API contract. TestSpecMatchesRoutes keeps it in sync with endpoints(),
+// and the handler tests validate every response against it.
+//
+//go:embed openapi.yaml
+var openAPISpec []byte
+
+type endpoint struct {
+	pattern string
+	handler http.HandlerFunc
+}
+
+// endpoints is the api's route table (the probes are registered by httpx.Probes).
+func (s *server) endpoints() []endpoint {
+	return []endpoint{
+		{"POST /orders", s.withFaults(s.createOrder)},
+		{"GET /orders/{id}", s.withFaults(s.getOrder)},
+		{"GET /burn", s.withFaults(s.burn)},
+		{"GET /version", s.getVersion},
+		{"GET /openapi.yaml", serveOpenAPI},
+	}
+}
+
 func (s *server) routes(mux *http.ServeMux) {
-	httpx.Handle(mux, "POST /orders", s.withFaults(s.createOrder))
-	httpx.Handle(mux, "GET /orders/{id}", s.withFaults(s.getOrder))
-	httpx.Handle(mux, "GET /burn", s.withFaults(s.burn))
-	httpx.Handle(mux, "GET /version", s.getVersion)
+	for _, e := range s.endpoints() {
+		httpx.Handle(mux, e.pattern, e.handler)
+	}
+}
+
+func serveOpenAPI(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/yaml")
+	// Public document: allow browser tools such as editor.swagger.io to fetch it cross-origin.
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	_, _ = w.Write(openAPISpec)
 }
 
 // withFaults fails a configurable fraction of requests. A release with FAULT_RATE > 0
