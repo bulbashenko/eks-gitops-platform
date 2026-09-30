@@ -63,9 +63,16 @@ func run() error {
 	probes.Register(mux)
 	s.routes(mux)
 
+	// Every response names the version that served it, which makes canary traffic splits
+	// visible from the outside: curl -sI https://api.<domain>/version | grep -i x-app-version
+	withVersion := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-App-Version", version)
+		mux.ServeHTTP(w, r)
+	})
+
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           mux,
+		Handler:           withVersion,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,
