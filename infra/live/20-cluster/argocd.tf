@@ -57,7 +57,12 @@ resource "helm_release" "argocd" {
     }
     configs = {
       # TLS terminates at the ALB.
-      params = { "server.insecure" = true }
+      params = {
+        "server.insecure" = true
+        # Diff against a server-side dry-run apply, so CRD defaults and mutating webhooks
+        # (PodMonitor relabel actions, Kyverno policy defaults) are not reported as drift.
+        "controller.diff.server.side" = true
+      }
       cm = {
         "timeout.reconciliation" = "60s"
         # Argo Rollouts health checks are built in; Karpenter NodeClaims churn constantly.

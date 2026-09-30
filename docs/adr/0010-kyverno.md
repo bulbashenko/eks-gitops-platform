@@ -6,7 +6,7 @@
 Guardrails (no privileged pods, no `:latest`, only trusted images, resource limits) should be enforced at admission, not only in code review.
 
 ## Decision
-Use **Kyverno** with `ClusterPolicy` resources in `gitops/platform/kyverno-policies`:
+Use **Kyverno** `ValidatingPolicy` resources (CEL, `policies.kyverno.io/v1`; the older `ClusterPolicy` is deprecated as of Kyverno 1.19) in `gitops/platform/kyverno-policies`:
 - cluster-wide (excluding `kube-system`): no privileged containers, no `:latest` or untagged images;
 - namespace `orders`: images only from our ECR (`*.dkr.ecr.*.amazonaws.com/egp/*`), plus non-root, read-only root filesystem, no privilege escalation, and CPU/memory requests with a memory limit.
 

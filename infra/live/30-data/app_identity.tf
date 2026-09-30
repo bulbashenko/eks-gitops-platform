@@ -50,11 +50,13 @@ module "worker_pod_identity" {
   }
 }
 
-# Publish data-layer facts to Argo CD (GitOps Bridge), owned by this layer's field manager.
+# Publish data-layer facts to Argo CD (GitOps Bridge).
+# Every server-side-apply resource needs its OWN field manager: an apply declares the complete
+# set of fields that manager owns, so two resources sharing a manager delete each other's fields.
 resource "kubernetes_annotations" "bridge" {
   api_version   = "v1"
   kind          = "Secret"
-  field_manager = "terraform-30-data"
+  field_manager = "terraform-30-data-bridge"
   metadata {
     name      = "in-cluster"
     namespace = "argocd"
