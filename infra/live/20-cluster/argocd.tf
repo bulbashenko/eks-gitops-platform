@@ -36,7 +36,6 @@ locals {
     karpenter_node_role_name = module.karpenter.node_iam_role_name
     gitops_repo_url          = var.gitops_repo_url
     gitops_revision          = var.gitops_revision
-    grafana_admin_secret     = aws_secretsmanager_secret.grafana_admin.name
   }
 }
 

@@ -25,7 +25,6 @@ spec:
         helm:
           valuesObject:
             region: '{{ index .metadata.annotations "aws_region" }}'
-            grafanaAdminSecret: '{{ index .metadata.annotations "grafana_admin_secret" }}'
             ordersQueueName: '{{ index .metadata.annotations "cluster_name" }}-orders'
       destination:
         server: "{{ .server }}"

@@ -56,3 +56,22 @@ module "external_secrets_pod_identity" {
     }
   }
 }
+
+# Grafana reads RDS and SQS metrics from CloudWatch.
+module "grafana_pod_identity" {
+  source  = "terraform-aws-modules/eks-pod-identity/aws"
+  version = "2.9.0"
+
+  name = "${local.name}-grafana"
+  additional_policy_arns = {
+    CloudWatchReadOnlyAccess = "arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess"
+  }
+
+  associations = {
+    this = {
+      cluster_name    = module.eks.cluster_name
+      namespace       = "monitoring"
+      service_account = "kube-prometheus-stack-grafana"
+    }
+  }
+}

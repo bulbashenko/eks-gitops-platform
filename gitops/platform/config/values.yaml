@@ -1,6 +1,5 @@
 # Injected by the ApplicationSet from the GitOps Bridge annotations.
 region: ""
-grafanaAdminSecret: ""
 
 appNamespace: orders
 

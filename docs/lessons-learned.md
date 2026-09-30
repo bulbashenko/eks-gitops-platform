@@ -55,7 +55,13 @@ Issues found while bringing the platform up in a fresh AWS account (eu-north-1, 
 - **Cause:** `sum(rate(...{code=~"5.."}))` is an **empty vector**, not 0, when no 5xx series exist, so the ratio was empty too.
 - **Fix:** `(… or vector(0)) / …`.
 
-## 10. Tooling
+## 10. The read-only CI plan failed on a Terraform-generated secret
+
+- **Symptom:** `terraform plan` of `20-cluster` in CI failed with `egp-gha-tf-plan is not authorized to perform secretsmanager:GetSecretValue`.
+- **Cause:** refreshing `aws_secretsmanager_secret_version` always reads the value. The deeper problem was that Terraform generated the Grafana password with `random_password`, so it sat in plain text in state, visible to anyone who can plan.
+- **Fix:** the password is now generated in-cluster by an ESO `Password` generator. Terraform no longer holds any generated secret, and the plan role keeps its "cannot read secrets" property. Granting the plan role `GetSecretValue` would have hidden the symptom and widened access.
+
+## 11. Tooling
 
 - CachyOS sets `MAKEFLAGS=-j$(nproc)` for package builds, which made `make up` run layers in parallel ("Unable to find remote state"). Fixed with `.NOTPARALLEL:` in the Makefile.
 - EKS allows control-plane → node traffic only on specific ports, so `kubectl get --raw …/services/prometheus:9090/proxy` hangs. Use `kubectl port-forward` (via the kubelet) instead.
