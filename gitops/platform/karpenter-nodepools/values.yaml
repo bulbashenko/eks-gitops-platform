@@ -1,0 +1,10 @@
+# Injected by the ApplicationSet from the GitOps Bridge annotations.
+clusterName: ""
+nodeRoleName: ""
+
+maxPods: 58
+
+# Cost ceiling for everything Karpenter launches.
+limits:
+  cpu: "16"
+  memory: 64Gi

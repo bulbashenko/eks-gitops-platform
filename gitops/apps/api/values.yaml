@@ -1,0 +1,31 @@
+name: api
+
+image:
+  tag: ""   # set by CI (.github/workflows/app-ci.yml)
+
+ingress:
+  enabled: true
+  subdomain: api
+
+rollout:
+  enabled: true
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 12
+  targetCPUUtilizationPercentage: 60
+
+database:
+  enabled: true
+
+aws:
+  queue: true
+
+env:
+  # Demo lever: a non-zero value turns this release into a "bad" canary.
+  FAULT_RATE: "0"
+
+resources:
+  requests: { cpu: 250m, memory: 64Mi }
+  limits: { memory: 128Mi }

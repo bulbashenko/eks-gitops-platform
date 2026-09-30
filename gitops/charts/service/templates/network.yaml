@@ -1,0 +1,90 @@
+{{- $name := include "service.name" . }}
+{{- if .Values.service.enabled }}
+{{- $services := ternary (list (printf "%s-stable" $name) (printf "%s-canary" $name)) (list $name) .Values.rollout.enabled }}
+{{- range $services }}
+---
+# With a Rollout there are two Services; Argo Rollouts pins each one to the stable or
+# canary ReplicaSet by adding the pod-template-hash to its selector.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ . }}
+  labels:
+    {{- include "service.labels" $ | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "service.selectorLabels" $ | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ $.Values.service.port }}
+      targetPort: http
+{{- end }}
+{{- end }}
+{{- if .Values.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "service.labels" . | nindent 4 }}
+  annotations:
+    alb.ingress.kubernetes.io/group.name: {{ required "platform.albGroupName is required" .Values.platform.albGroupName }}
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/certificate-arn: {{ required "platform.certificateArn is required" .Values.platform.certificateArn }}
+    alb.ingress.kubernetes.io/healthcheck-path: /readyz
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "10"
+    alb.ingress.kubernetes.io/target-group-attributes: deregistration_delay.timeout_seconds=15
+spec:
+  ingressClassName: alb
+  rules:
+    - host: {{ printf "%s.%s" (required "ingress.subdomain is required" .Values.ingress.subdomain) (required "platform.domain is required" .Values.platform.domain) }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "service.stableService" . }}
+                port:
+                  {{- if .Values.rollout.enabled }}
+                  # Argo Rollouts writes the weighted forward action into an annotation.
+                  name: use-annotation
+                  {{- else }}
+                  number: {{ .Values.service.port }}
+                  {{- end }}
+{{- end }}
+{{- if .Values.networkPolicy.enabled }}
+---
+# Default-deny ingress for this workload: Prometheus may scrape it and, if it is exposed,
+# the ALB (inside the VPC) may reach it. Nothing else can.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "service.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "service.selectorLabels" . | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: http
+    {{- if .Values.ingress.enabled }}
+    - from:
+        - ipBlock:
+            cidr: {{ required "platform.vpcCidr is required" .Values.platform.vpcCidr }}
+      ports:
+        - port: http
+    {{- end }}
+{{- end }}

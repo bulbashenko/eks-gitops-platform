@@ -1,0 +1,49 @@
+# Every add-on follows the same shape: the cluster generator exposes the GitOps Bridge
+# annotations written by Terraform, which are templated into Helm values.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: aws-load-balancer-controller
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            argocd.argoproj.io/secret-type: cluster
+  template:
+    metadata:
+      name: aws-load-balancer-controller
+    spec:
+      project: platform
+      source:
+        repoURL: https://aws.github.io/eks-charts
+        chart: aws-load-balancer-controller
+        targetRevision: 3.5.0
+        helm:
+          releaseName: aws-load-balancer-controller
+          valuesObject:
+            clusterName: '{{ index .metadata.annotations "cluster_name" }}'
+            region: '{{ index .metadata.annotations "aws_region" }}'
+            vpcId: '{{ index .metadata.annotations "vpc_id" }}'
+            serviceAccount:
+              create: true
+              name: aws-load-balancer-controller
+            nodeSelector:
+              node-role.egp.io/system: "true"
+            enableServiceMutatorWebhook: false
+            defaultSSLPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
+            resources:
+              requests: { cpu: 50m, memory: 96Mi }
+              limits: { memory: 256Mi }
+      destination:
+        server: "{{ .server }}"
+        namespace: kube-system
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        syncOptions: [ServerSideApply=true]
+        retry:
+          limit: 20
+          backoff: { duration: 15s, factor: 2, maxDuration: 3m }

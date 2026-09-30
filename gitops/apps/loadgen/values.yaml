@@ -1,0 +1,21 @@
+name: loadgen
+
+image:
+  tag: ""   # set by CI
+
+# Steady synthetic traffic through the public ALB, so canary analysis always has data.
+replicas: 1
+
+service:
+  enabled: false
+
+pdb:
+  enabled: false
+
+env:
+  TARGET_URL: "https://api.{{ .Values.platform.domain }}"
+  RPS: "8"
+
+resources:
+  requests: { cpu: 50m, memory: 32Mi }
+  limits: { memory: 64Mi }

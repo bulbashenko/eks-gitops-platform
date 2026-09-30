@@ -3,7 +3,7 @@ directory:
   - infra
 framework:
   - terraform
-download-external-modules: true
+download-external-modules: false
 quiet: true
 skip-check:
   # Demo environment: S3 access logging and cross-region replication of the state bucket
@@ -16,5 +16,8 @@ skip-check:
   # us-east-1 log group; both are listed in the roadmap rather than half-done here.
   - CKV2_AWS_38
   - CKV2_AWS_39
+  # Registry modules are pinned to exact versions and locked; Renovate would bump them.
+  # Commit-hash sources would lose the registry's version semantics for no real gain here.
+  - CKV_TF_1
   # The tf-apply role is admin by design, restricted by the OIDC environment claim (ADR-0004).
   - CKV_AWS_274

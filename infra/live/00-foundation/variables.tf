@@ -23,7 +23,7 @@ variable "create_github_oidc_provider" {
 variable "services" {
   description = "Services that get an ECR repository."
   type        = list(string)
-  default     = ["api", "worker"]
+  default     = ["api", "worker", "loadgen"]
 }
 
 variable "domain" {

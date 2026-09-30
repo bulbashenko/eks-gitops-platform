@@ -1,0 +1,5 @@
+apiVersion: v2
+name: platform-config
+description: Secret store, platform secrets, app namespace, dashboards and SLO rules
+type: application
+version: 0.1.0

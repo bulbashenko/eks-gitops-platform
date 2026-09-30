@@ -1,0 +1,13 @@
+# The application namespace is owned by the platform: the `apps` Argo CD project may not
+# create namespaces, so tenants cannot opt out of these labels.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.appNamespace }}
+  labels:
+    # Pod Security Admission, restricted profile.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted
+    # The ALB controller holds new pods NotReady until they are healthy ALB targets,
+    # so rolling updates never shrink the healthy target set.
+    elbv2.k8s.aws/pod-readiness-gate-inject: enabled

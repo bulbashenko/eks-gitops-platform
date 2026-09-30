@@ -1,0 +1,52 @@
+{{- $ns := .Values.appNamespace -}}
+{{- $budget := .Values.slo.errorBudget -}}
+# Multi-window, multi-burn-rate alerts (Google SRE workbook, chapter 5) on the api's
+# availability SLO. Fast burn pages; slow burn opens a ticket.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: orders-slo
+  namespace: monitoring
+spec:
+  groups:
+    - name: orders-api-sli
+      rules:
+        {{- range $w := list "5m" "30m" "1h" "6h" }}
+        - record: orders:api_error_ratio:rate{{ $w }}
+          expr: |
+            sum(rate(http_requests_total{namespace="{{ $ns }}", app="api", code=~"5.."}[{{ $w }}]))
+            /
+            sum(rate(http_requests_total{namespace="{{ $ns }}", app="api"}[{{ $w }}]))
+        {{- end }}
+    - name: orders-api-slo
+      rules:
+        - alert: OrdersApiErrorBudgetFastBurn
+          expr: |
+            orders:api_error_ratio:rate5m > (14.4 * {{ $budget }})
+            and
+            orders:api_error_ratio:rate1h > (14.4 * {{ $budget }})
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: api is burning its error budget 14x too fast
+            description: At this rate the monthly budget is gone in about 2 days.
+        - alert: OrdersApiErrorBudgetSlowBurn
+          expr: |
+            orders:api_error_ratio:rate30m > (6 * {{ $budget }})
+            and
+            orders:api_error_ratio:rate6h > (6 * {{ $budget }})
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: api is burning its error budget 6x too fast
+    - name: orders-worker
+      rules:
+        - alert: OrdersWorkerFailing
+          expr: sum(rate(worker_messages_processed_total{namespace="{{ $ns }}", result!="ok"}[5m])) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: The worker keeps failing messages; they will end up in the DLQ.

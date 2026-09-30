@@ -1,0 +1,36 @@
+# Two tenants with different blast radius:
+#   platform - cluster add-ons, may manage cluster-scoped resources anywhere
+#   apps     - product services, confined to the orders namespace and namespaced kinds
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  namespace: argocd
+spec:
+  description: Cluster add-ons managed by the platform team
+  sourceRepos: ["*"]
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: "*"
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: apps
+  namespace: argocd
+spec:
+  description: Product services
+  sourceRepos:
+    - https://github.com/bulbashenko/eks-gitops-platform.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: orders
+  clusterResourceWhitelist: []
+  namespaceResourceBlacklist:
+    - group: ""
+      kind: ResourceQuota
+    - group: ""
+      kind: LimitRange

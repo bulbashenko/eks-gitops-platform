@@ -1,0 +1,139 @@
+# Build → scan → push → deploy-by-commit.
+# On pull requests: tests plus a vulnerability scan of every image, nothing is pushed.
+# On main: multi-arch images go to ECR (OIDC, no keys) and the new tag is committed to
+# gitops/apps/*/values.yaml; Argo CD picks it up and Argo Rollouts runs the canary.
+name: app-ci
+
+on:
+  pull_request:
+    paths: ["apps/**", ".github/workflows/app-ci.yml"]
+  push:
+    branches: [main]
+    paths: ["apps/**", ".github/workflows/app-ci.yml"]
+
+permissions: {}
+
+concurrency:
+  group: app-ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'eu-central-1' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: apps/go.mod
+          cache-dependency-path: apps/go.sum
+      - name: Vet and test
+        working-directory: apps
+        run: |
+          test -z "$(gofmt -l .)" || { gofmt -l .; echo "gofmt needed"; exit 1; }
+          go vet ./...
+          go test -race -count=1 ./...
+
+  image:
+    needs: test
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [api, worker, loadgen]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Compute tag
+        id: meta
+        run: echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # Scan before anything is pushed: a critical CVE blocks the release.
+      - name: Build for scanning
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: apps
+          build-args: |
+            SERVICE=${{ matrix.service }}
+            VERSION=${{ steps.meta.outputs.tag }}
+          platforms: linux/amd64
+          load: true
+          tags: scan/${{ matrix.service }}:${{ steps.meta.outputs.tag }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,scope=${{ matrix.service }},mode=max
+
+      - name: Trivy scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: scan/${{ matrix.service }}:${{ steps.meta.outputs.tag }}
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Configure AWS credentials
+        if: github.event_name == 'push'
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ECR_PUSH }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to ECR
+        if: github.event_name == 'push'
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+
+      # amd64 + arm64 (Graviton). Go cross-compiles, so no QEMU is involved.
+      - name: Build and push multi-arch image
+        if: github.event_name == 'push'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: apps
+          build-args: |
+            SERVICE=${{ matrix.service }}
+            VERSION=${{ steps.meta.outputs.tag }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.ecr.outputs.registry }}/egp/${{ matrix.service }}:${{ steps.meta.outputs.tag }}
+          sbom: true
+          provenance: mode=max
+          cache-from: type=gha,scope=${{ matrix.service }}
+
+  deploy:
+    # GitOps: CI never talks to the cluster. It records the desired version in Git.
+    if: github.event_name == 'push'
+    needs: image
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    concurrency:
+      group: gitops-write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - name: Bump image tags
+        run: |
+          tag="${GITHUB_SHA::7}"
+          for f in gitops/apps/*/values.yaml; do
+            sed -i -E "s|^(  tag: ).*|\1\"${tag}\"   # set by CI|" "$f"
+          done
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add gitops/apps
+          git diff --cached --quiet && { echo "Nothing to deploy"; exit 0; }
+          git commit -m "deploy: ${tag}"
+          for i in 1 2 3; do git pull --rebase origin main && git push origin HEAD:main && exit 0; sleep 5; done
+          exit 1

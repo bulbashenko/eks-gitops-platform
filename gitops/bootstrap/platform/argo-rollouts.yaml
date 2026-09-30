@@ -1,0 +1,58 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: argo-rollouts
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            argocd.argoproj.io/secret-type: cluster
+  template:
+    metadata:
+      name: argo-rollouts
+    spec:
+      project: platform
+      source:
+        repoURL: https://argoproj.github.io/argo-helm
+        chart: argo-rollouts
+        targetRevision: 2.43.2
+        helm:
+          releaseName: argo-rollouts
+          valuesObject:
+            controller:
+              replicas: 1
+              nodeSelector: { node-role.egp.io/system: "true" }
+              metrics:
+                enabled: true
+                serviceMonitor:
+                  enabled: true
+            # The dashboard has no authentication of its own: it is reachable only from the
+            # allow-listed presenter IPs (ALB source-ip condition).
+            dashboard:
+              enabled: true
+              nodeSelector: { node-role.egp.io/system: "true" }
+              ingress:
+                enabled: true
+                ingressClassName: alb
+                hosts: ['rollouts.{{ index .metadata.annotations "domain" }}']
+                annotations:
+                  alb.ingress.kubernetes.io/group.name: '{{ index .metadata.annotations "alb_group_name" }}'
+                  alb.ingress.kubernetes.io/scheme: internet-facing
+                  alb.ingress.kubernetes.io/target-type: ip
+                  alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+                  alb.ingress.kubernetes.io/ssl-redirect: "443"
+                  alb.ingress.kubernetes.io/certificate-arn: '{{ index .metadata.annotations "acm_certificate_arn" }}'
+                  alb.ingress.kubernetes.io/conditions.argo-rollouts-dashboard: '{{ index .metadata.annotations "ui_source_ip_condition" }}'
+      destination:
+        server: "{{ .server }}"
+        namespace: argo-rollouts
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        syncOptions: [CreateNamespace=true, ServerSideApply=true, SkipDryRunOnMissingResource=true]
+        retry:
+          limit: 20
+          backoff: { duration: 15s, factor: 2, maxDuration: 3m }

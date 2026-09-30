@@ -1,0 +1,134 @@
+# Static checks and a read-only plan per layer, posted to the pull request.
+# Ephemeral layers are only planned while their upstream layer is deployed.
+name: terraform
+
+on:
+  pull_request:
+    paths: ["infra/**", ".github/workflows/terraform.yml", ".checkov.yaml", ".tflint.hcl"]
+  push:
+    branches: [main]
+    paths: ["infra/**"]
+
+permissions: {}
+
+concurrency:
+  group: terraform-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'eu-central-1' }}
+  TF_IN_AUTOMATION: "true"
+  TF_VAR_budget_email: ${{ secrets.BUDGET_EMAIL }}
+  TF_VAR_ui_allowed_cidrs: ${{ vars.UI_ALLOWED_CIDRS || '["127.0.0.1/32"]' }}
+  TF_VAR_cluster_admin_arns: ${{ vars.CLUSTER_ADMIN_ARNS || '[]' }}
+
+jobs:
+  static:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_wrapper: false
+      - uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337 # v6.3.2
+      - name: terraform fmt
+        run: terraform fmt -check -recursive -diff infra
+      - name: tflint
+        run: |
+          tflint --init --config "$PWD/.tflint.hcl"
+          tflint --recursive --config "$PWD/.tflint.hcl" --chdir infra
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: checkov
+        run: pipx run checkov==3.3.20 --config-file .checkov.yaml
+
+  plan:
+    needs: static
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      max-parallel: 1   # layers read each other's state
+      matrix:
+        include:
+          - layer: 00-foundation
+          - layer: 10-network
+          - layer: 20-cluster
+            upstream: 10-network
+          - layer: 30-data
+            upstream: 20-cluster
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TF_PLAN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Is the upstream layer deployed?
+        id: gate
+        env:
+          UPSTREAM: ${{ matrix.upstream }}
+        run: |
+          if [ -z "$UPSTREAM" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          make "init-$UPSTREAM" >/dev/null
+          n=$(terraform -chdir="infra/live/$UPSTREAM" output -json | jq 'length')
+          echo "run=$([ "$n" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Plan
+        id: plan
+        if: steps.gate.outputs.run == 'true'
+        env:
+          LAYER: ${{ matrix.layer }}
+        run: |
+          make "init-$LAYER" >/dev/null
+          set +e
+          terraform -chdir="infra/live/$LAYER" plan -input=false -no-color -detailed-exitcode > plan.txt 2>&1
+          code=$?
+          set -e
+          cat plan.txt
+          echo "exitcode=$code" >> "$GITHUB_OUTPUT"
+          [ "$code" -ne 1 ]
+
+      - name: Comment on the pull request
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          LAYER: ${{ matrix.layer }}
+          RAN: ${{ steps.gate.outputs.run }}
+          EXIT: ${{ steps.plan.outputs.exitcode }}
+        with:
+          script: |
+            const fs = require('fs');
+            const layer = process.env.LAYER;
+            const marker = `<!-- tf-plan:${layer} -->`;
+            let body;
+            if (process.env.RAN !== 'true') {
+              body = `${marker}\n### \`${layer}\`: skipped\nThe upstream layer is not deployed (environment is down).`;
+            } else {
+              const status = { '0': 'no changes', '2': 'changes', '1': 'failed' }[process.env.EXIT] ?? 'failed';
+              let plan = fs.existsSync('plan.txt') ? fs.readFileSync('plan.txt', 'utf8') : '';
+              const summary = (plan.match(/^(Plan:.*|No changes\..*)$/m) || [''])[0];
+              if (plan.length > 60000) plan = '...(truncated)\n' + plan.slice(-60000);
+              body = `${marker}\n### \`${layer}\`: ${status}\n${summary}\n<details><summary>Plan output</summary>\n\n\`\`\`\n${plan}\n\`\`\`\n</details>`;
+            }
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
+            const existing = comments.find(c => c.body.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }

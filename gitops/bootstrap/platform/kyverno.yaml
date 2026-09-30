@@ -1,0 +1,79 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: kyverno
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            argocd.argoproj.io/secret-type: cluster
+  template:
+    metadata:
+      name: kyverno
+    spec:
+      project: platform
+      source:
+        repoURL: https://kyverno.github.io/kyverno
+        chart: kyverno
+        targetRevision: 3.9.1
+        helm:
+          releaseName: kyverno
+          valuesObject:
+            # Single replicas keep the demo cheap; production runs 3 admission replicas.
+            admissionController:
+              replicas: 1
+              nodeSelector: { node-role.egp.io/system: "true" }
+            backgroundController:
+              replicas: 1
+              nodeSelector: { node-role.egp.io/system: "true" }
+            cleanupController:
+              replicas: 1
+              nodeSelector: { node-role.egp.io/system: "true" }
+            reportsController:
+              replicas: 1
+              nodeSelector: { node-role.egp.io/system: "true" }
+      destination:
+        server: "{{ .server }}"
+        namespace: kyverno
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        syncOptions: [CreateNamespace=true, ServerSideApply=true]
+        retry:
+          limit: 20
+          backoff: { duration: 15s, factor: 2, maxDuration: 3m }
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: kyverno-policies
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            argocd.argoproj.io/secret-type: cluster
+  template:
+    metadata:
+      name: kyverno-policies
+    spec:
+      project: platform
+      source:
+        repoURL: '{{ index .metadata.annotations "gitops_repo_url" }}'
+        targetRevision: '{{ index .metadata.annotations "gitops_revision" }}'
+        path: gitops/platform/kyverno-policies
+      destination:
+        server: "{{ .server }}"
+        namespace: kyverno
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        syncOptions: [ServerSideApply=true, SkipDryRunOnMissingResource=true]
+        retry:
+          limit: 20
+          backoff: { duration: 15s, factor: 2, maxDuration: 3m }

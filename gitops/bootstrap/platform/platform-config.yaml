@@ -1,0 +1,38 @@
+# Glue that depends on several add-ons' CRDs: the secret store, platform secrets,
+# the application namespace, dashboards and SLO alert rules.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: platform-config
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            argocd.argoproj.io/secret-type: cluster
+  template:
+    metadata:
+      name: platform-config
+    spec:
+      project: platform
+      source:
+        repoURL: '{{ index .metadata.annotations "gitops_repo_url" }}'
+        targetRevision: '{{ index .metadata.annotations "gitops_revision" }}'
+        path: gitops/platform/config
+        helm:
+          valuesObject:
+            region: '{{ index .metadata.annotations "aws_region" }}'
+            grafanaAdminSecret: '{{ index .metadata.annotations "grafana_admin_secret" }}'
+            ordersQueueName: '{{ index .metadata.annotations "cluster_name" }}-orders'
+      destination:
+        server: "{{ .server }}"
+        namespace: monitoring
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        syncOptions: [CreateNamespace=true, ServerSideApply=true, SkipDryRunOnMissingResource=true]
+        retry:
+          limit: 20
+          backoff: { duration: 15s, factor: 2, maxDuration: 3m }

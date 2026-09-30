@@ -1,0 +1,131 @@
+{{- $name := include "service.name" . }}
+# Scrape pods directly (not through Services) so each sample carries the ReplicaSet hash:
+# that is what lets the analysis compare the canary against the stable version.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "service.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "service.selectorLabels" . | nindent 6 }}
+  podMetricsEndpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+          targetLabel: app
+        - sourceLabels: [__meta_kubernetes_pod_label_rollouts_pod_template_hash]
+          targetLabel: rollout_hash
+{{- if .Values.hpa.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "service.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    {{- if .Values.rollout.enabled }}
+    apiVersion: argoproj.io/v1alpha1
+    kind: Rollout
+    {{- else }}
+    apiVersion: apps/v1
+    kind: Deployment
+    {{- end }}
+    name: {{ $name }}
+  minReplicas: {{ .Values.hpa.minReplicas }}
+  maxReplicas: {{ .Values.hpa.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.hpa.targetCPUUtilizationPercentage }}
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 120
+{{- end }}
+{{- if .Values.pdb.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "service.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "service.selectorLabels" . | nindent 6 }}
+{{- end }}
+{{- if and .Values.rollout.enabled .Values.rollout.analysis.enabled }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: {{ $name }}-error-rate
+  labels:
+    {{- include "service.labels" . | nindent 4 }}
+spec:
+  args:
+    - name: canary-hash
+  metrics:
+    - name: canary-5xx-ratio
+      interval: {{ .Values.rollout.analysis.interval }}
+      initialDelay: 30s
+      failureLimit: 1
+      # No samples yet (e.g. no traffic reached the canary) counts as success.
+      successCondition: "len(result) == 0 || isNaN(result[0]) || result[0] <= {{ .Values.rollout.analysis.maxErrorRate }}"
+      provider:
+        prometheus:
+          address: http://kube-prometheus-stack-prometheus.monitoring:9090
+          query: |
+            (
+              sum(rate(http_requests_total{namespace="{{ .Release.Namespace }}", app="{{ $name }}", code=~"5..", rollout_hash="{{ "{{args.canary-hash}}" }}"}[1m]))
+              or vector(0)
+            )
+            /
+            sum(rate(http_requests_total{namespace="{{ .Release.Namespace }}", app="{{ $name }}", rollout_hash="{{ "{{args.canary-hash}}" }}"}[1m]))
+{{- end }}
+{{- if .Values.database.enabled }}
+---
+# Credentials come from the RDS-managed master secret; the connection facts from the
+# platform. The app reads standard libpq PG* variables, so no driver config is needed.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $name }}-db
+  labels:
+    {{- include "service.labels" . | nindent 4 }}
+spec:
+  refreshInterval: 15m
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: aws-secrets-manager
+  target:
+    name: {{ $name }}-db
+    template:
+      data:
+        PGHOST: {{ required "platform.dbHost is required" .Values.platform.dbHost | quote }}
+        PGPORT: {{ .Values.platform.dbPort | quote }}
+        PGDATABASE: {{ .Values.platform.dbName | quote }}
+        PGSSLMODE: require
+        PGUSER: {{ "{{ .username }}" | quote }}
+        PGPASSWORD: {{ "{{ .password }}" | quote }}
+  data:
+    - secretKey: username
+      remoteRef:
+        key: {{ required "platform.dbMasterSecretArn is required" .Values.platform.dbMasterSecretArn }}
+        property: username
+    - secretKey: password
+      remoteRef:
+        key: {{ .Values.platform.dbMasterSecretArn }}
+        property: password
+{{- end }}

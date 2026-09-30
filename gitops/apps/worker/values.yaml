@@ -1,0 +1,17 @@
+name: worker
+
+image:
+  tag: ""   # set by CI
+
+replicas: 2
+
+# The worker has no HTTP API of its own; the Service only exists for probes/metrics.
+service:
+  enabled: false
+
+database:
+  enabled: true
+
+aws:
+  queue: true
+  bucket: true

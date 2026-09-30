@@ -1,0 +1,12 @@
+# Injected by the ApplicationSet from the GitOps Bridge annotations.
+region: ""
+grafanaAdminSecret: ""
+
+appNamespace: orders
+
+# 99% availability SLO for the public api: 1% of requests may fail (5xx).
+slo:
+  errorBudget: 0.01
+
+# Used by the dashboard's CloudWatch panels.
+ordersQueueName: ""

@@ -1,0 +1,13 @@
+# Karpenter's chart is only published as an OCI artifact on public ECR.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: repo-karpenter-oci
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+stringData:
+  name: karpenter
+  type: helm
+  url: public.ecr.aws/karpenter
+  enableOCI: "true"

@@ -1,0 +1,33 @@
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: default
+spec:
+  role: {{ required "nodeRoleName is required" .Values.nodeRoleName }}
+  amiSelectorTerms:
+    - alias: al2023@latest
+  # Same subnets and security group as the system node group, found by tag.
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: {{ required "clusterName is required" .Values.clusterName }}
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: {{ .Values.clusterName }}
+  # IMDSv2 only, and a hop limit of 1 so pods cannot borrow the node role:
+  # workloads get AWS access exclusively through Pod Identity.
+  metadataOptions:
+    httpEndpoint: enabled
+    httpTokens: required
+    httpPutResponseHopLimit: 1
+  kubelet:
+    maxPods: {{ .Values.maxPods }}
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeSize: 30Gi
+        volumeType: gp3
+        encrypted: true
+        deleteOnTermination: true
+  tags:
+    Project: egp
+    ManagedBy: karpenter

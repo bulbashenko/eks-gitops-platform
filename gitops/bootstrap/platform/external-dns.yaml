@@ -1,0 +1,53 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: external-dns
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            argocd.argoproj.io/secret-type: cluster
+  template:
+    metadata:
+      name: external-dns
+    spec:
+      project: platform
+      source:
+        repoURL: https://kubernetes-sigs.github.io/external-dns
+        chart: external-dns
+        targetRevision: 1.22.0
+        helm:
+          releaseName: external-dns
+          valuesObject:
+            provider:
+              name: aws
+            env:
+              - name: AWS_DEFAULT_REGION
+                value: '{{ index .metadata.annotations "aws_region" }}'
+            domainFilters: ['{{ index .metadata.annotations "domain" }}']
+            # sync deletes records for removed Ingresses; ownership is tracked in TXT records.
+            policy: sync
+            registry: txt
+            txtOwnerId: '{{ index .metadata.annotations "cluster_name" }}'
+            sources: [ingress, service]
+            serviceAccount:
+              create: true
+              name: external-dns
+            nodeSelector:
+              node-role.egp.io/system: "true"
+            resources:
+              requests: { cpu: 20m, memory: 64Mi }
+              limits: { memory: 128Mi }
+      destination:
+        server: "{{ .server }}"
+        namespace: external-dns
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        syncOptions: [CreateNamespace=true, ServerSideApply=true]
+        retry:
+          limit: 20
+          backoff: { duration: 15s, factor: 2, maxDuration: 3m }

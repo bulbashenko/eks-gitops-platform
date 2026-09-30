@@ -1,0 +1,14 @@
+# Dashboards are provisioned by Grafana's sidecar from labelled ConfigMaps.
+# Placeholders are substituted here because the JSON uses Go-template legends that Helm must not touch.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-orders-overview
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: Orders
+data:
+  orders-overview.json: |-
+{{ .Files.Get "dashboards/orders-overview.json" | replace "__QUEUE__" (required "ordersQueueName is required" .Values.ordersQueueName) | replace "__DB__" (printf "%s-orders" (trimSuffix "-orders" .Values.ordersQueueName)) | indent 4 }}

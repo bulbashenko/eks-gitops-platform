@@ -35,8 +35,8 @@ destroy-%: init-% ## terraform destroy a layer
 up: $(addprefix apply-,$(LAYERS)) ## Create the ephemeral environment (network -> cluster -> data)
 
 .PHONY: down
-down: ## Destroy the ephemeral environment in reverse order
-	$(foreach l,$(shell echo $(LAYERS) | tr ' ' '\n' | tac),$(MAKE) destroy-$(l);)
+down: ## Clean up controller-created AWS resources, then destroy data -> cluster -> network
+	PROJECT=$(PROJECT) REGION=$(REGION) ./scripts/platform-down.sh
 
 ##@ Application
 .PHONY: test
