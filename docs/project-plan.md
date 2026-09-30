@@ -114,3 +114,10 @@ Already installed: `aws`, `docker`. Also needed: a GitHub account/repo and a dom
 - `platform-up`: all Argo apps Healthy/Synced; `curl https://api.<domain>/healthz` returns 200; a message posted to the API lands in RDS through SQS and the worker.
 - Each demo scenario runs twice in a row successfully.
 - `platform-down`: no leftover billable resources (check with `aws resourcegroupstaggingapi get-resources` plus Cost Explorer the next day).
+
+## Changes made during implementation
+- **`infra/bootstrap`** was split out of 00-foundation: the state bucket cannot hold its own creation's state.
+- A third service, **`loadgen`**, was added. Canary analysis needs live traffic through the ALB, where the weights are applied.
+- **GitOps Bridge** (Terraform facts as Argo CD cluster-secret annotations) replaced hard-coded values in `gitops/`.
+- **Infracost** moved to the roadmap: PR plans already show the change set, and cost is covered in ADR-0011.
+- **checkov** scans our own code statically. Community modules are not scanned internally, because their `count = 0` branches produce false positives.
