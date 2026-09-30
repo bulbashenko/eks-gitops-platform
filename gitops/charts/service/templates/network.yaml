@@ -45,18 +45,21 @@ spec:
     - host: {{ printf "%s.%s" (required "ingress.subdomain is required" .Values.ingress.subdomain) (required "platform.domain is required" .Values.platform.domain) }}
       http:
         paths:
-          - path: /
+          {{- range .Values.ingress.paths }}
+          - path: {{ . }}
             pathType: Prefix
             backend:
               service:
-                name: {{ include "service.stableService" . }}
+                name: {{ include "service.stableService" $ }}
                 port:
-                  {{- if .Values.rollout.enabled }}
-                  # Argo Rollouts writes the weighted forward action into an annotation.
+                  {{- if $.Values.rollout.enabled }}
+                  # Argo Rollouts writes the weighted forward action into an annotation;
+                  # every path shares it, so all public routes get the same canary split.
                   name: use-annotation
                   {{- else }}
-                  number: {{ .Values.service.port }}
+                  number: {{ $.Values.service.port }}
                   {{- end }}
+          {{- end }}
 {{- end }}
 {{- if .Values.networkPolicy.enabled }}
 ---

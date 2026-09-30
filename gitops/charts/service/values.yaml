@@ -27,6 +27,11 @@ ingress:
   enabled: false
   # Host prefix; the full host is <subdomain>.<platform.domain>.
   subdomain: ""
+  # Only these paths are routed from the internet. Anything else (e.g. /metrics, /healthz,
+  # /readyz) hits the ALB's default 404: operational endpoints are for in-cluster callers only.
+  # ALB health checks go straight to the pod IP, so they are not affected.
+  paths:
+    - /
 
 rollout:
   enabled: false

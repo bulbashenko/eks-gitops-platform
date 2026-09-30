@@ -6,6 +6,11 @@ image:
 ingress:
   enabled: true
   subdomain: api
+  # Public API surface. /metrics, /healthz and /readyz stay cluster-internal.
+  paths:
+    - /orders
+    - /version
+    - /burn
 
 rollout:
   enabled: true
