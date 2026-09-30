@@ -40,7 +40,7 @@ client ─POST /orders─▶ api ─▶ SQS orders (DLQ after 5 tries) ─▶ wo
        ◀─GET /orders/{id}─┘                                           └─▶ S3 receipts/
 ```
 
-- `/healthz`, `/readyz` (fails during shutdown so the ALB drains first) and `/metrics` (RED) on every service.
+- `/healthz`, `/readyz` (fails during shutdown so the ALB drains first) and `/metrics` (RED) on every service. These are cluster-internal: the ALB only routes `/orders`, `/version` and `/burn`.
 - Messages are deleted only after successful processing, and inserts are idempotent, so at-least-once delivery is safe.
 - `FAULT_RATE=0.3` makes 30% of api requests fail. This produces the "bad release" for the canary demo.
 - `GET /burn?ms=50` burns CPU so load tests drive the HPA and Karpenter.
