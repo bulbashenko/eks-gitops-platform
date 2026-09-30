@@ -40,6 +40,10 @@ up: $(addprefix apply-,$(LAYERS)) ## Create the ephemeral environment (network -
 down: ## Clean up controller-created AWS resources, then destroy data -> cluster -> network
 	PROJECT=$(PROJECT) REGION=$(REGION) ./scripts/platform-down.sh
 
+.PHONY: allow-ip
+allow-ip: ## Let this machine's public IP reach the UIs (KEEP=1 to add, EXTRA=cidr,... for more)
+	REGION=$(REGION) PROJECT=$(PROJECT) ./scripts/allow-ip.sh
+
 ##@ Application
 .PHONY: test
 test: ## Go vet + unit tests

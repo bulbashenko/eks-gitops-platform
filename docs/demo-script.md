@@ -16,6 +16,21 @@
 5. Open these tabs: the Argo CD app `api`, Rollouts dashboard (namespace `orders`), the Grafana "Orders — service overview" dashboard, and the GitHub repo.
 6. Record a backup video of the whole script.
 
+## On the day, at their office (5 minutes before you start)
+
+```bash
+# 1. Connect the laptop to their Wi-Fi, then:
+export AWS_PROFILE=egp-admin
+aws sso login --profile egp-admin     # browser login + MFA
+make allow-ip                         # detects the new public IP, updates the ALB allowlist (~2-3 min)
+```
+
+It prints the three UI URLs with their HTTP status: `200`/`302` means reachable. If their network egresses from several
+IPs (large corporate NAT pools), add them explicitly: `EXTRA=203.0.113.0/24 make allow-ip`. `KEEP=1` adds to the
+list instead of replacing it. The script refuses to apply if the plan would touch anything besides the allowlist.
+
+Fallback if their Wi-Fi blocks something: phone hotspot, then `make allow-ip` again.
+
 ## 0. Architecture (2 min)
 
 Open [architecture.md](architecture.md) (the diagrams render on GitHub) and cover:

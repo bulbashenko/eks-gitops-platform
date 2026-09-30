@@ -99,6 +99,7 @@ terraform -chdir=infra/live/00-foundation output github_role_arns
 export TF_VAR_ui_allowed_cidrs="[\"$(curl -s ifconfig.me)/32\"]"
 export TF_VAR_cluster_admin_arns='["arn:aws:iam::<account>:role/<your-admin-role>"]'
 make up      # network → cluster → data  (~30 min, then ~10 min for Argo CD to converge)
+make allow-ip  # on a new network: let this IP reach the Argo CD / Grafana / Rollouts UIs
 make down    # pause Argo CD → remove ALBs and Karpenter nodes → destroy data → cluster → network
 make help
 ```
