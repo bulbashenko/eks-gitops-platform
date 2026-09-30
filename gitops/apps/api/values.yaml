@@ -24,7 +24,7 @@ aws:
 
 env:
   # Demo lever: a non-zero value turns this release into a "bad" canary.
-  FAULT_RATE: "0"
+  FAULT_RATE: "0.3"
 
 resources:
   requests: { cpu: 250m, memory: 64Mi }
