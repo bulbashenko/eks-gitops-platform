@@ -1,7 +1,7 @@
 name: api
 
 image:
-  tag: ""   # set by CI (.github/workflows/app-ci.yml)
+  tag: "850dc97"   # set by CI
 
 ingress:
   enabled: true

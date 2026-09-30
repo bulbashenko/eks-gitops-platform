@@ -1,7 +1,7 @@
 name: worker
 
 image:
-  tag: ""   # set by CI
+  tag: "850dc97"   # set by CI
 
 replicas: 2
 
