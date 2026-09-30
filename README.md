@@ -13,6 +13,7 @@ Only a small persistent layer (state, registries, DNS, certificate) survives bet
 | [docs/adr/](docs/adr/README.md) | 11 decision records: what was chosen, the trade-offs, the rejected alternatives |
 | [docs/demo-script.md](docs/demo-script.md) | Live demo: canary auto-rollback, Karpenter scale-out, policy enforcement |
 | [docs/runbooks/](docs/runbooks/README.md) | Symptom-first operational procedures |
+| [docs/lessons-learned.md](docs/lessons-learned.md) | What broke on the first real deployment, why, and the fix |
 
 ## Repository layout
 

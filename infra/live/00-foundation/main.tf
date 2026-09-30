@@ -148,3 +148,16 @@ resource "aws_budgets_budget" "monthly" {
     subscriber_email_addresses = [var.budget_email]
   }
 }
+
+#------------------------------------------------------------------------------
+# Account prerequisites
+#------------------------------------------------------------------------------
+
+# EC2 creates this role on the first Spot request, but only if the caller may create
+# service-linked roles. Karpenter's controller role (rightly) may not, so without it every
+# Spot launch fails with AuthFailure.ServiceLinkedRoleCreationNotPermitted and Karpenter
+# silently falls back to On-Demand.
+resource "aws_iam_service_linked_role" "spot" {
+  aws_service_name = "spot.amazonaws.com"
+  description      = "Lets Karpenter launch Spot capacity"
+}
