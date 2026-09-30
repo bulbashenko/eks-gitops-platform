@@ -81,7 +81,7 @@ terraform -chdir=infra/live/00-foundation output github_role_arns
 | Kind | Name | Value |
 |---|---|---|
 | Variable | `AWS_ROLE_ECR_PUSH` / `AWS_ROLE_TF_PLAN` / `AWS_ROLE_TF_APPLY` | from the output above |
-| Variable | `CLUSTER_ADMIN_ARNS` | JSON list of IAM role/user ARNs that should get cluster-admin, e.g. `["arn:aws:iam::123456789012:role/admin"]` |
+| Variable | `CLUSTER_ADMIN_ARNS` | JSON list of IAM role ARNs that get cluster-admin. For IAM Identity Center roles use the **full ARN including the path** (`…:role/aws-reserved/sso.amazonaws.com/<region>/AWSReservedSSO_…`); EKS rejects the path-less form. Find it with `aws iam list-roles --path-prefix /aws-reserved/` |
 | Variable | `UI_ALLOWED_CIDRS` | JSON list used by PR plans, e.g. `["203.0.113.7/32"]` |
 | Secret | `BUDGET_EMAIL` | budget alert address (used by foundation plans) |
 

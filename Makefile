@@ -1,6 +1,8 @@
 SHELL        := /bin/bash
 .SHELLFLAGS  := -eu -o pipefail -c
 .DEFAULT_GOAL := help
+# Layers depend on each other's state: never run targets in parallel, even if MAKEFLAGS sets -j.
+.NOTPARALLEL:
 
 PROJECT      ?= egp
 REGION       ?= eu-north-1
