@@ -84,12 +84,14 @@ for app in argo-rollouts kube-prometheus-stack; do
 done
 deadline=$((SECONDS + 300))
 while :; do
-  pending=$(kubectl get ingress -A -o json | jq --arg ip "$ip/32" '
+  # Every UI condition must carry exactly the new list (checking only for this IP would pass
+  # immediately when the IP was already allowed and only EXTRA/KEEP entries changed).
+  pending=$(kubectl get ingress -A -o json | jq --argjson want "$allow" '
     [.items[] | .metadata.annotations // {} | to_entries[]
      | select(.key | startswith("alb.ingress.kubernetes.io/conditions."))
-     | select(.value | contains($ip) | not)] | length')
+     | select((.value | fromjson | .[0].sourceIpConfig.values | unique) != $want)] | length')
   [ "$pending" -eq 0 ] && break
-  [ "$SECONDS" -ge "$deadline" ] && die "some Ingresses still lack $ip after 5 minutes; check the argo-rollouts and kube-prometheus-stack apps"
+  [ "$SECONDS" -ge "$deadline" ] && die "some Ingresses still lack the new allowlist after 5 minutes; check the argo-rollouts and kube-prometheus-stack apps"
   sleep 10
 done
 sleep 20 # the ALB controller reconciles the listener rules right after the Ingress changes
