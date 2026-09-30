@@ -13,8 +13,9 @@ spec:
       rules:
         {{- range $w := list "5m" "30m" "1h" "6h" }}
         - record: orders:api_error_ratio:rate{{ $w }}
+          # "or vector(0)": with no 5xx at all the numerator is an empty vector, not 0.
           expr: |
-            sum(rate(http_requests_total{namespace="{{ $ns }}", app="api", code=~"5.."}[{{ $w }}]))
+            (sum(rate(http_requests_total{namespace="{{ $ns }}", app="api", code=~"5.."}[{{ $w }}])) or vector(0))
             /
             sum(rate(http_requests_total{namespace="{{ $ns }}", app="api"}[{{ $w }}]))
         {{- end }}

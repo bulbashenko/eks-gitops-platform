@@ -1,0 +1,23 @@
+# Passes Pod Security Admission "restricted" (non-root, no privilege escalation, dropped
+# capabilities, seccomp) so that the denial you see comes from Kyverno's ECR-only policy.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: untrusted
+  namespace: orders
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 101
+    seccompProfile: { type: RuntimeDefault }
+  containers:
+    - name: web
+      image: nginxinc/nginx-unprivileged:1.27
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        capabilities: { drop: [ALL] }
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits: { memory: 32Mi }

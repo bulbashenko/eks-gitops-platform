@@ -67,14 +67,23 @@ Point out:
 
 ## 3. Policy enforcement (1 min)
 
+Two admission layers, shown one at a time:
+
 ```bash
+# Layer 1, Pod Security Admission (built in, "restricted" on orders):
 kubectl -n orders run evil --image=nginx:latest --privileged
-# → denied: disallow-privileged-containers, disallow-latest-tag, restrict-app-images-to-ecr, …
-kubectl -n orders run lazy --image=nginx
-# → denied: images must come from this account's ECR
+# → forbidden: violates PodSecurity "restricted:latest": privileged, allowPrivilegeEscalation, ...
+
+# Layer 2, Kyverno. This pod satisfies PSA, but its image is not from our ECR:
+kubectl apply -f docs/demo/untrusted-image.yaml
+# → denied: Policy restrict-app-images-to-ecr failed: Images in 'orders' must come from this account's ECR
+
+# Cluster-wide rule outside orders:
+kubectl -n default run lazy --image=nginx
+# → denied: Policy disallow-latest-tag failed: Images must use an explicit, immutable tag
 ```
 
-**Talking points:** Kyverno plus PSA `restricted`; policies are code synced by Argo CD; next step is cosign `verifyImages` ([ADR-0010](adr/0010-kyverno.md)).
+**Talking points:** PSA covers the pod-security baseline for free. Kyverno adds organisation rules (trusted registry, tags, limits) as CEL `ValidatingPolicy`, synced by Argo CD. The next step is cosign `verifyImages` ([ADR-0010](adr/0010-kyverno.md)).
 
 ## 4. Wrap-up (2 min)
 
